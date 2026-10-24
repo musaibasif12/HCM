@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en" data-page="index.html">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="huma — People, simply managed. A browser-based HCM Lite hackathon application.">
+  <meta name="theme-color" content="#275D4E">
+  <title>Welcome · huma</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/responsive.css">
+  <script src="js/utils.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/employees.js" defer></script>
+  <script src="js/settings.js" defer></script>
+  <script src="js/leaves.js" defer></script>
+  <script src="js/attendance.js" defer></script>
+  <script src="js/payroll.js" defer></script>
+  <script src="js/admin.js" defer></script>
+  <script src="js/helper.js" defer></script>
+  <script src="js/app.js" defer></script>
+</head>
+<body class="auth-page">
+  <a class="skip-link" href="#auth-content">Skip to main content</a>
+  <div class="auth-layout">
+    <aside class="auth-story" aria-label="About huma">
+      <div data-brand></div>
+      <div class="auth-story-content">
+        <p class="eyebrow">PEOPLE, SIMPLY MANAGED.</p>
+        <h2>Less paperwork.<br>More possibility.</h2>
+        <p>A calm home for your people, their working days, and everything that helps your team move forward.</p>
+        <div class="story-divider"></div>
+        <ul class="story-features">
+          <li><span>01</span><div><strong>A place for every person</strong><p>Your team’s essentials, beautifully organized.</p></div></li>
+          <li><span>02</span><div><strong>A clearer working day</strong><p>Attendance and time away, kept in sync.</p></div></li>
+          <li><span>03</span><div><strong>Payroll with perspective</strong><p>Every adjustment, easy to understand.</p></div></li>
+        </ul>
+      </div>
+      <p class="auth-story-footer">Small teams. Thoughtfully supported.</p>
+    </aside>
+    <main class="auth-main" id="auth-content" tabindex="-1"></main>
+  </div>
+  <div class="toast-region" id="toasts" aria-label="Notifications"></div>
+  <noscript><p class="notice">Enable JavaScript to create your workspace or sign in.</p></noscript>
+</body>
+</html>

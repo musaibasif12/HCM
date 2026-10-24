@@ -1,0 +1,98 @@
+@media (max-width: 1200px) {
+  .metrics-grid:not(.metrics-three) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .content-grid { grid-template-columns: minmax(0, 1fr); }
+  .topbar-date { display: none; }
+  .payslip { padding: 28px; }
+  .payslip-columns { gap: 24px; }
+  .payslip-identity { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 1024px) {
+  .main-content { padding: 24px; }
+  .topbar { padding: 0 24px; }
+  .settings-section { gap: 24px; }
+  .auth-story { padding: 32px; }
+  .auth-main { padding: 32px; }
+}
+@media (max-width: 800px) {
+  .sidebar { transform: translateX(-100%); visibility: hidden; width: 260px; max-width: 88vw; }
+  .nav-open .sidebar { transform: translateX(0); visibility: visible; }
+  .nav-open { overflow: hidden; }
+  .nav-open .helper-launcher, .nav-open .helper-panel { visibility: hidden; }
+  .menu-toggle, .sidebar-close { display: inline-grid; }
+  .workspace { margin-left: 0; }
+  .topbar { padding: 0 20px; }
+  .main-content { padding: 24px; }
+  .page-footer { padding: 16px 24px 80px; }
+  .metrics-grid:not(.metrics-three) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .topbar-date { display: inline; }
+  .auth-layout { grid-template-columns: minmax(0, 1fr); }
+  .auth-story { padding: 24px; background: var(--background); border-right: 0; border-bottom: 1px solid var(--border); }
+  .auth-story-content, .auth-story-footer { display: none; }
+  .auth-main { padding: 32px 24px; max-width: 520px; }
+}
+@media (max-width: 600px) {
+  .main-content { padding: 24px 16px; gap: 20px; }
+  .topbar { padding: 0 12px; gap: 8px; }
+  .topbar-context { gap: 8px; }
+  .topbar-context > svg, .breadcrumb-separator, .breadcrumb-current, .topbar-date { display: none; }
+  .company-name { max-width: 170px; }
+  .page-header { align-items: start; flex-direction: column; gap: 16px; }
+  .page-header h1 { font-size: 28px; }
+  .metrics-grid:not(.metrics-three), .metrics-three { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .metrics-three .metric:last-child { grid-column: 1 / -1; }
+  .metric { padding: 16px; }
+  .metric-value, .metrics-three .metric-value { font-size: 27px; }
+  .card-header { padding: 16px; align-items: start; flex-wrap: wrap; }
+  .card-body, .toolbar { padding: 16px; }
+  .toolbar .field { min-width: 0; flex: 1 1 140px; }
+  .directory-toolbar .field:first-child { max-width: none; flex-basis: 100%; }
+  .toolbar .small { margin-left: 0; }
+  .form-grid { grid-template-columns: minmax(0, 1fr); }
+  .form-actions { flex-wrap: wrap; }
+  th, td { padding: 12px 16px; }
+  .attendance-action { align-items: start; flex-direction: column; padding: 24px; }
+  .attendance-action .row-actions { width: 100%; }
+  .attendance-action .button { flex: 1; }
+  .settings-section { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .settings-section .field { max-width: none; }
+  .settings-section .field:last-child { margin-bottom: 0; }
+  .activity-strip { flex-direction: column; align-items: stretch; gap: 16px; }
+  progress { width: 100%; }
+  .page-footer { padding: 8px 16px 80px; flex-direction: column; gap: 4px; }
+  .dialog { padding: 20px; }
+  .button, input, select { min-height: 44px; }
+  .dialog .form-actions .button { flex: 1; }
+  .payslip { padding: 20px; }
+  .payslip-heading { gap: 16px; }
+  .payslip-heading h2 { font-size: 15px; }
+  .payslip-identity, .payslip-columns { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .payslip-identity { padding: 20px 0; }
+  .payslip-heading .eyebrow { font-size: 8px; letter-spacing: .6px; }
+  .payroll-toolbar { padding: 0 0 20px; }
+  .payroll-toolbar .button { margin-left: 0; }
+  .helper-panel { right: 16px; bottom: 16px; }
+  .helper-launcher { right: 16px; bottom: 16px; }
+}
+@media (max-width: 360px) {
+  .metrics-grid:not(.metrics-three), .metrics-three { grid-template-columns: minmax(0, 1fr); }
+  .metrics-three .metric:last-child { grid-column: auto; }
+  .company-name { max-width: 128px; }
+  .auth-main { padding: 28px 20px; }
+  .auth-main h1 { font-size: 26px; }
+  .payslip-heading { flex-direction: column; }
+  .payslip-heading .align-right { text-align: left; }
+}
+@media print {
+  @page { size: A4; margin: 14mm; }
+  html, body { background: white !important; color: black; font-size: 11px; }
+  .sidebar, .topbar, .page-header, .page-footer, .helper-panel, .helper-launcher, .toast-region, .sidebar-backdrop, .skip-link, .no-print { display: none !important; }
+  .workspace { display: block; margin: 0; min-height: 0; }
+  .main-content { padding: 0; display: block; max-width: none; }
+  .payslip { border: 0; border-radius: 0; padding: 0; max-width: none; }
+  .payslip-heading { flex-direction: row; }
+  .payslip-heading .align-right { text-align: right; }
+  .payslip-identity { grid-template-columns: 1fr 1.4fr 1fr; }
+  .payslip-columns { grid-template-columns: 1fr 1fr; gap: 24px; }
+  .payslip-heading, .payslip-identity, .payslip-columns, .payslip-notes { break-inside: avoid; }
+  .payslip * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
