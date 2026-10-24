@@ -2,6 +2,31 @@
   'use strict';
   const S = window.HCMStorage;
   const U = window.HCMUtils;
+  function resolveShift(company, date) {
+    U.parseDate(date);
+    const calendar = U.calendarDay(date, company.calendarExceptions || []);
+    const override = (company.shiftExceptions || []).find((entry) => entry.date === date);
+    const startTime = override?.startTime || company.startTime;
+    const endTime = override?.endTime || company.endTime || '17:00';
+    return { date, isWorkingDay: calendar.working, startTime, endTime, graceMinutes: company.graceMinutes,
+      custom: Boolean(override), note: override?.note || '', calendarType: calendar.type, calendarName: calendar.name,
+      valid: /^([01]\d|2[0-3]):[0-5]\d$/.test(startTime) && /^([01]\d|2[0-3]):[0-5]\d$/.test(endTime) && endTime > startTime };
+  }
+  function getEffectiveShift(companyId, date) {
+    window.HCMAuth.requireRole(['admin', 'employee']);
+    if (companyId !== S.getActiveCompanyId()) throw new Error('You can only view the active company’s shift.');
+    return resolveShift(S.getCompany(), date);
+  }
+  function checkInWindow(shift, now = new Date()) {
+    if (!shift.isWorkingDay) return { state: 'non-working', allowed: false, message: shift.calendarType === 'holiday' ? 'Today is a company holiday.' : 'Today is a non-working day.' };
+    if (!shift.valid) return { state: 'invalid', allowed: false, message: 'Ask your admin to configure a valid daytime shift.' };
+    if (U.localDate(now) !== shift.date) return { state: 'closed', allowed: false, message: 'Check-in is only available for today.' };
+    const seconds = (clock) => Number(clock.slice(0, 2)) * 3600 + Number(clock.slice(3, 5)) * 60;
+    const current = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds() + now.getMilliseconds() / 1000;
+    if (current < seconds(shift.startTime)) return { state: 'before', allowed: false, message: `Check-in opens at ${shift.startTime}.` };
+    if (current > seconds(shift.endTime)) return { state: 'after', allowed: false, message: 'Check-in closed for today.' };
+    return { state: 'open', allowed: true, message: 'Your check-in window is open.' };
+  }
   function checkIn(now = new Date()) {
     return S.mutate(() => {
       const user = window.HCMAuth.requireRole('employee');
@@ -12,9 +37,12 @@
       const attendance = S.getAttendance();
       if (attendance.some((record) => record.employeeId === user.id && record.date === date)) throw new Error('You have already checked in today.');
       if (window.HCMLeaves.approvedDates(user.id, S.getLeaves(), calendar).has(date)) throw new Error('You are on approved paid leave today.');
+      const shift = getEffectiveShift(S.getActiveCompanyId(), date);
+      const availability = checkInWindow(shift, now);
+      if (!availability.allowed) throw new Error(availability.message);
       const checkIn = now.toISOString();
-      const result = U.calculateAttendanceStatus(checkIn, null, company);
-      const record = { employeeId: user.id, date, checkIn, checkOut: null, status: result.status, wasLate: result.wasLate, startTime: company.startTime, graceMinutes: company.graceMinutes };
+      const result = U.calculateAttendanceStatus(checkIn, null, shift);
+      const record = { employeeId: user.id, date, checkIn, checkOut: null, status: result.status, wasLate: result.wasLate, startTime: shift.startTime, endTime: shift.endTime, graceMinutes: shift.graceMinutes, customShift: shift.custom, shiftNote: shift.note };
       S.transaction({ attendance: [...attendance, record] });
       return record;
     });
@@ -53,5 +81,5 @@
     if (window.HCMLeaves.approvedDates(employee.id, leaves, calendar).has(date)) return { status: 'leave', record: null };
     return { status: date < today ? 'absent' : 'not-started', record: null };
   }
-  window.HCMAttendance = Object.freeze({ checkIn, checkOut, records, dayState });
+  window.HCMAttendance = Object.freeze({ checkIn, checkOut, records, dayState, resolveShift, getEffectiveShift, checkInWindow });
 }());

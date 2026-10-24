@@ -65,7 +65,7 @@
       const utils = window.HCMUtils;
       if (!allowAdditional && (store.getCompany() || store.listCompanies().length || store.getUsers().length || store.getAttendance().length || store.getLeaves().length)) throw new Error('Setup cannot replace existing records. Use Create company to add another workspace.');
       if (!store.getCompany() && !store.listCompanies().length && (store.getUsers().length || store.getAttendance().length || store.getLeaves().length)) throw new Error('Existing records have no company. Repair the stored data before creating a workspace.');
-      const company = { id: utils.id(), name: utils.required(input.companyName, 'Company name'), startTime: '09:00', graceMinutes: 15, leaveQuota: 20 };
+      const company = { id: utils.id(), name: utils.required(input.companyName, 'Company name'), startTime: '09:00', endTime: '17:00', graceMinutes: 15, leaveQuota: 20 };
       if (store.listCompanies().some((entry) => entry.name.toLowerCase() === company.name.toLowerCase())) throw new Error('A company with this name already exists in this browser.');
       const user = { id: utils.id(), name: utils.required(input.name, 'Admin name'), email: utils.email(input.email), password: utils.password(input.password), role: 'admin', department: '', salary: 0 };
       if (input.password !== input.confirmPassword) throw new Error('Passwords do not match.');

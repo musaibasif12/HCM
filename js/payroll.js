@@ -41,5 +41,53 @@
     if (!employee || employee.role !== 'employee') throw new Error('Choose an active employee.');
     return calculate(employee, year, month, { attendance: window.HCMStorage.getAttendance(), leaves: window.HCMStorage.getLeaves(), calendar: window.HCMStorage.getCompany().calendarExceptions || [] });
   }
-  window.HCMPayroll = Object.freeze({ calculateMonthlyAttendance, calculate, calculatePayslip });
+  function payment(employeeId, year, month) {
+    // Reuse the same company and ownership checks as the salary calculation.
+    calculatePayslip(employeeId, year, month);
+    const period = `${year}-${String(month).padStart(2, '0')}`;
+    return window.HCMStorage.getCompany().payrollPayments?.find((entry) => entry.employeeId === employeeId && entry.period === period) || null;
+  }
+  function setPaymentStatus(employeeId, year, month, status) {
+    const S = window.HCMStorage;
+    const companyId = S.getActiveCompanyId();
+    const actorId = window.HCMAuth.requireRole('admin').id;
+    U.monthRange(year, month);
+    if (!['paid', 'unpaid'].includes(status)) return Promise.reject(new Error('Choose Paid or Not paid.'));
+    return S.mutate(() => {
+      const actor = window.HCMAuth.requireRole('admin');
+      if (actor.id !== actorId || S.getActiveCompanyId() !== companyId) throw new Error('The active workspace changed. Reload payroll before updating a payment.');
+      const slip = calculatePayslip(employeeId, year, month);
+      if (!slip.eligible) throw new Error('Payment status is unavailable for this period.');
+      const company = S.getCompany();
+      const period = `${year}-${String(month).padStart(2, '0')}`;
+      const existing = company.payrollPayments || [];
+      const previous = existing.find((entry) => entry.employeeId === employeeId && entry.period === period);
+      if (previous?.status === status) return previous;
+      const entry = { employeeId, period, status, amount: status === 'paid' ? slip.netSalary : 0, updatedAt: new Date().toISOString(), updatedBy: actor.id };
+      S.transaction({ company: { ...company, payrollPayments: [...existing.filter((entry) => entry.employeeId !== employeeId || entry.period !== period), entry] } });
+      return entry;
+    });
+  }
+  function listPayroll(year, month) {
+    window.HCMAuth.requireRole('admin');
+    U.monthRange(year, month);
+    return window.HCMStorage.getUsers().filter((user) => user.role === 'employee').map((employee) => ({ employee,
+      slip: calculatePayslip(employee.id, year, month), payment: payment(employee.id, year, month) }));
+  }
+  function summarize(rows) {
+    const eligible = rows.filter((row) => row.slip.eligible);
+    const paid = eligible.filter((row) => row.payment?.status === 'paid');
+    return { net: eligible.reduce((sum, row) => sum + row.slip.netSalary, 0),
+      paid: paid.reduce((sum, row) => sum + row.payment.amount, 0),
+      pending: eligible.filter((row) => row.payment?.status !== 'paid').reduce((sum, row) => sum + row.slip.netSalary, 0),
+      paidCount: paid.length, employeeCount: eligible.length,
+      estimated: eligible.some((row) => row.slip.provisional),
+      changedPayments: paid.some((row) => Math.abs(row.payment.amount - row.slip.netSalary) > 0.005) };
+  }
+  function filterRows(rows, query = '', status = 'all') {
+    const name = query.trim().toLocaleLowerCase();
+    return rows.filter((row) => row.employee.name.toLocaleLowerCase().includes(name)
+      && (status === 'all' || (row.slip.eligible && (row.payment?.status === 'paid' ? 'paid' : 'unpaid') === status)));
+  }
+  window.HCMPayroll = Object.freeze({ calculateMonthlyAttendance, calculate, calculatePayslip, payment, setPaymentStatus, listPayroll, summarize, filterRows });
 }());

@@ -5,6 +5,8 @@
   const U = window.HCMUtils;
   const page = document.documentElement.dataset.page;
   let renderCurrent = () => {};
+  let employeeTimer = null;
+  let employeeView = null;
   const iconPaths = {
     grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
     users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m20 0v-2a4 4 0 0 0-3-3.87M15 3.13a4 4 0 0 1 0 7.75"/><circle cx="9" cy="7" r="4"/>',
@@ -22,6 +24,12 @@
     search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
     chat: '<path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8Z"/>',
     print: '<path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/>',
+    chevronLeft: '<path d="m15 18-6-6 6-6"/>',
+    chevronRight: '<path d="m9 18 6-6-6-6"/>',
+    chevrons: '<path d="m8 9 4-4 4 4m-8 6 4 4 4-4"/>',
+    download: '<path d="M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5"/>',
+    eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+    more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
   };
   function el(tag, attrs = {}, ...children) {
     const node = document.createElement(tag);
@@ -46,8 +54,9 @@
     svg.innerHTML = iconPaths[name] || iconPaths.grid;
     return svg;
   }
-  function brand() {
-    return el('a', { class: 'brand', href: 'index.html', 'aria-label': 'huma home' }, el('span', { class: 'brand-symbol', 'aria-hidden': 'true' }, 'h'), el('span', {}, 'huma', el('span', { class: 'brand-dot' }, '.')));
+  function brand(linked = true) {
+    return el(linked ? 'a' : 'div', { class: 'brand', href: linked ? 'index.html' : undefined, 'aria-label': linked ? 'Huma home' : 'Huma' },
+      el('img', { class: 'brand-mark', src: 'assets/huma-logo.svg', width: 36, height: 36, alt: '', 'aria-hidden': 'true' }), el('span', { class: 'brand-wordmark' }, 'huma'));
   }
   function button(text, action, variant = 'primary', iconName) {
     return el('button', { type: 'button', class: `button button-${variant}`, onClick: action }, iconName && icon(iconName), text);
@@ -104,15 +113,22 @@
     });
   }
   function field(label, name, options = {}) {
-    const { type = 'text', value = '', required = true, hint, ...attributes } = options;
-    const id = `field-${name}`;
+    const { type = 'text', value = '', required = true, hint, id: customId, ...attributes } = options;
+    const id = customId || `field-${name}`;
     const hintId = `${id}-hint`;
     const input = el(type === 'textarea' ? 'textarea' : 'input', { id, name, type: type === 'textarea' ? undefined : type, required, value, 'aria-describedby': hint ? hintId : undefined, ...attributes });
-    return el('div', { class: 'field' }, el('label', { for: id }, label), input, hint && el('small', { class: 'field-hint', id: hintId }, hint));
+    let control = input;
+    if (type === 'password') {
+      const toggle = iconButton('eye', `Show ${label.toLowerCase()}`, () => {
+        const visible = input.type === 'password'; input.type = visible ? 'text' : 'password';
+        toggle.setAttribute('aria-label', `${visible ? 'Hide' : 'Show'} ${label.toLowerCase()}`); toggle.setAttribute('aria-pressed', String(visible));
+      }, 'password-toggle');
+      toggle.setAttribute('aria-pressed', 'false'); control = el('div', { class: 'password-input' }, input, toggle);
+    }
+    return el('div', { class: 'field' }, el('label', { for: id }, label), control, hint && el('small', { class: 'field-hint', id: hintId }, hint));
   }
-  function select(label, name, options, value = '') {
-    const input = el('select', { id: `field-${name}`, name }, options.map(([val, text]) => el('option', { value: val, selected: val === value }, text)));
-    return el('div', { class: 'field' }, el('label', { for: `field-${name}` }, label), input);
+  function select(label, name, options, value = '', config = {}) {
+    return window.HCMSelect.create({ el, icon }, label, name, options, value, config);
   }
   function formError() { return el('p', { class: 'form-error', role: 'alert', tabindex: '-1', hidden: true }); }
   function submitButton(label) { return el('button', { class: 'button button-primary', type: 'submit' }, label); }
@@ -123,13 +139,75 @@
     node.append(el('div', { class: 'dialog-header' }, el('div', {}, el('h2', { id: 'dialog-title' }, title), el('p', { id: 'dialog-description', class: 'muted' }, description)), iconButton('close', 'Close dialog', close)), content);
     node.addEventListener('close', () => { node.remove(); if (previous?.isConnected) previous.focus(); });
     node.addEventListener('click', (event) => { if (event.target === node && !node.querySelector('[aria-busy="true"]')) close(); });
+    node.addEventListener('keydown', (event) => {
+      if (event.key !== 'Tab') return;
+      const items = [...node.querySelectorAll('a[href],button,input,select,textarea,[tabindex]')].filter((item) => item.tabIndex >= 0 && !item.disabled && item.getClientRects().length);
+      if (event.shiftKey && document.activeElement === items[0]) { event.preventDefault(); items[items.length - 1]?.focus(); }
+      else if (!event.shiftKey && document.activeElement === items[items.length - 1]) { event.preventDefault(); items[0]?.focus(); }
+    });
     document.body.append(node);
     node.showModal();
     return { node, close };
   }
-  function person(user) {
+  function person(user, tag = 'div') {
     const initials = user.name.trim().split(/\s+/).map((part) => Array.from(part)[0]).slice(0, 2).join('').toUpperCase();
-    return el('div', { class: 'person' }, el('span', { class: 'avatar', 'aria-hidden': 'true' }, initials), el('div', { class: 'person-details' }, el('strong', {}, user.name), el('span', {}, user.email)));
+    return el(tag, { class: 'person' }, el('span', { class: 'avatar', 'aria-hidden': 'true' }, initials), el(tag === 'span' ? 'span' : 'div', { class: 'person-details' }, el('strong', {}, user.name), el('span', {}, user.email)));
+  }
+  function profileMenu(user) {
+    const wrapper = el('div', { class: 'profile-control' });
+    const menu = el('div', { class: 'profile-menu', id: 'profile-menu', role: 'menu', 'aria-label': 'Account options', 'aria-hidden': 'true' });
+    const trigger = el('button', { type: 'button', class: 'profile-trigger', 'aria-label': `Account menu for ${user.name}`, 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-controls': 'profile-menu' }, person(user, 'span'), icon('chevrons'));
+    let opened = false;
+    let pinned = false;
+    let hovered = false;
+    let closeTimer;
+    function setOpen(value, focusIndex = null) {
+      window.clearTimeout(closeTimer);
+      opened = value;
+      if (!value) pinned = false;
+      wrapper.classList.toggle('profile-open', value);
+      trigger.setAttribute('aria-expanded', String(value));
+      menu.setAttribute('aria-hidden', String(!value));
+      menu.inert = !value;
+      if (value && focusIndex !== null) menu.querySelectorAll('button')[focusIndex].focus();
+    }
+    function accountAction(action) {
+      setOpen(false);
+      try { action(); } catch (error) { toast(error.message, true); trigger.focus(); }
+    }
+    for (const [name, iconName, action] of [['Employee Login', 'users', () => A.switchAccount('employee')], ['Admin Login', 'building', () => A.switchAccount('admin')], ['Log Out', 'logout', () => A.signOut()]]) {
+      if (name === 'Log Out') menu.append(el('div', { class: 'profile-divider', role: 'separator' }));
+      menu.append(el('button', { type: 'button', role: 'menuitem', tabindex: '-1', class: `profile-option${name === 'Log Out' ? ' profile-logout' : ''}`, onClick: () => accountAction(action) }, icon(iconName), name));
+    }
+    menu.inert = true;
+    trigger.addEventListener('click', () => { const next = !opened || !pinned; setOpen(next); pinned = next; });
+    wrapper.addEventListener('pointerenter', () => {
+      hovered = true;
+      if (window.matchMedia('(hover: hover) and (pointer: fine)').matches && !window.matchMedia('(max-width: 800px)').matches) setOpen(true);
+    });
+    wrapper.addEventListener('pointerleave', () => {
+      hovered = false;
+      closeTimer = window.setTimeout(() => { if (!pinned && !wrapper.contains(document.activeElement)) setOpen(false); }, 180);
+    });
+    wrapper.addEventListener('focusout', () => {
+      window.setTimeout(() => { if (!hovered && !wrapper.contains(document.activeElement)) setOpen(false); }, 0);
+    });
+    wrapper.addEventListener('keydown', (event) => {
+      const items = [...menu.querySelectorAll('button')];
+      if (event.key === 'Escape' && opened) {
+        event.preventDefault(); event.stopPropagation(); setOpen(false); trigger.focus(); return;
+      }
+      if (event.key === 'Tab' && opened) { setOpen(false); trigger.focus(); return; }
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const index = items.indexOf(document.activeElement);
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : index < 0 ? (event.key === 'ArrowUp' ? items.length - 1 : 0) : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+      pinned = true;
+      setOpen(true, next);
+    });
+    document.addEventListener('pointerdown', (event) => { if (!wrapper.contains(event.target)) setOpen(false); });
+    wrapper.append(trigger, menu);
+    return { node: wrapper, close: () => setOpen(false) };
   }
   function initShell(user) {
     const sidebar = document.getElementById('sidebar');
@@ -138,8 +216,10 @@
     const media = window.matchMedia('(max-width: 800px)');
     let opened = false;
     let toggle;
+    const profile = profileMenu(user);
     function setOpen(value, focus = true) {
       opened = value && media.matches;
+      if (!opened) profile.close();
       document.body.classList.toggle('nav-open', opened);
       sidebar.inert = media.matches && !opened;
       workspace.inert = opened;
@@ -153,12 +233,8 @@
       ? [['admin.html', 'Overview', 'grid'], ['employees.html', 'Employees', 'users'], ['leaves.html', 'Leave requests', 'calendar'], ['payslip.html', 'Payroll', 'file'], ['settings.html', 'Settings', 'settings']]
       : [['employee.html', 'My dashboard', 'grid'], ['payslip.html', 'My payslip', 'file']];
     const nav = el('nav', { 'aria-label': 'Main navigation' }, el('ul', { class: 'nav-list' }, items.map(([href, name, iconName]) => el('li', {}, el('a', { class: 'nav-link', href, 'aria-current': href === page ? 'page' : undefined }, icon(iconName), name)))));
-    const accountAccess = el('div', { class: 'account-access' }, el('p', { class: 'nav-label' }, 'SWITCH ACCOUNT'));
-    for (const [role, label] of [['employee', 'Employee login'], ['admin', 'Admin login']]) {
-      accountAccess.append(button(label, () => { try { A.switchAccount(role); } catch (error) { toast(error.message, true); } }, 'secondary', role === 'employee' ? 'users' : 'building'));
-    }
     const companyAccess = el('div', { class: 'company-access' }, el('p', { class: 'nav-label' }, 'COMPANIES'), el('a', { class: 'nav-link', href: 'index.html?view=companies' }, icon('building'), 'Manage companies'), el('a', { class: 'nav-link', href: 'index.html?view=setup' }, icon('plus'), 'Create company'));
-    sidebar.append(nav, companyAccess, el('div', { class: 'sidebar-bottom' }, accountAccess, el('div', { class: 'account' }, person(user), iconButton('logout', 'Sign out', () => { try { A.signOut(); } catch (error) { toast(error.message, true); } })), el('span', { class: 'prototype-label' }, 'HCM Lite · Browser prototype')));
+    sidebar.append(nav, companyAccess, el('div', { class: 'sidebar-bottom' }, profile.node));
     toggle = iconButton('menu', 'Open navigation', () => setOpen(true), 'menu-toggle');
     toggle.setAttribute('aria-controls', 'sidebar');
     const company = S.getCompany();
@@ -169,13 +245,52 @@
       if (!opened) return;
       if (event.key === 'Escape') { setOpen(false); return; }
       if (event.key !== 'Tab') return;
-      const focusable = sidebar.querySelectorAll('a,button');
+      const focusable = [...sidebar.querySelectorAll('a,button')].filter((node) => node.tabIndex >= 0 && !node.closest('[inert]') && node.getClientRects().length);
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     });
     setOpen(false, false);
+    initMobileNavigation(user);
+  }
+  function initMobileNavigation(user) {
+    const employee = user.role === 'employee';
+    const items = employee ? [['employee.html#employee-home', 'Home', 'grid'], ['employee.html#attendance-calendar', 'Attendance', 'clock'], ['employee.html#leave-balance', 'Leaves', 'calendar'], ['payslip.html', 'Payslip', 'file']]
+      : [['admin.html', 'Overview', 'grid'], ['employees.html', 'Employees', 'users'], ['leaves.html', 'Leaves', 'calendar'], ['payslip.html', 'Payroll', 'file']];
+    const nav = el('nav', { class: 'mobile-bottom-nav', 'aria-label': 'Mobile main navigation' });
+    const links = items.map(([href, title, name]) => el('a', { href }, icon(name), el('span', {}, title)));
+    let sheet = null;
+    const more = el('button', { type: 'button', 'aria-label': 'More navigation', 'aria-haspopup': 'dialog', 'aria-expanded': 'false', onClick: () => openMore() }, icon('more'), el('span', {}, 'More'));
+    function markActive() {
+      const hash = window.location.hash || '#employee-home';
+      links.forEach((anchor, index) => {
+        const [route, fragment] = items[index][0].split('#');
+        const active = route === page && (!fragment || hash === `#${fragment}`);
+        if (active) anchor.setAttribute('aria-current', 'page'); else anchor.removeAttribute('aria-current');
+      });
+      if (!employee && page === 'settings.html') more.setAttribute('aria-current', 'page');
+    }
+    function showSheet(title, content) {
+      sheet = dialog(title, S.getCompany().name, content); sheet.node.classList.add('mobile-more-sheet');
+      document.body.classList.add('mobile-sheet-open'); more.setAttribute('aria-expanded', 'true');
+      sheet.node.addEventListener('close', () => { if (!document.querySelector('.mobile-more-sheet[open]')) { document.body.classList.remove('mobile-sheet-open'); more.setAttribute('aria-expanded', 'false'); more.focus(); } });
+      return sheet;
+    }
+    function account() {
+      sheet.close();
+      showSheet('Your account', el('div', { class: 'mobile-sheet-options' }, person(user),
+        button('Employee Login', () => A.switchAccount('employee'), 'secondary', 'users'), button('Admin Login', () => A.switchAccount('admin'), 'secondary', 'building'), button('Log Out', () => A.signOut(), 'danger-quiet', 'logout')));
+    }
+    function openMore() {
+      const actions = el('div', { class: 'mobile-sheet-options' });
+      if (!employee) actions.append(link('Settings', 'settings.html'));
+      actions.append(link('Manage companies', 'index.html?view=companies'), link('Create company', 'index.html?view=setup'), button('Account', account, 'secondary', 'users'),
+        button('Smart Helper', () => { sheet.node.addEventListener('close', () => document.querySelector('.helper-launcher')?.click(), { once: true }); sheet.close(); }, 'secondary', 'chat'), button('Log Out', () => A.signOut(), 'danger-quiet', 'logout'));
+      showSheet('More', actions);
+    }
+    nav.append(...links, more); document.body.append(nav); markActive();
+    window.addEventListener('hashchange', markActive);
   }
   function initAuth() {
     const current = A.getCurrentUser();
@@ -191,7 +306,7 @@
     for (const [mode, label] of choices) accessNav.append(el('a', { href: `index.html?view=${mode}${['admin', 'employee'].includes(mode) && requestedCompanyId ? `&company=${encodeURIComponent(requestedCompanyId)}` : ''}`, 'aria-current': mode === view ? 'page' : undefined }, label));
     main.append(accessNav);
     if (view === 'companies') { renderCompanies(main, current); return; }
-    main.append(el('p', { class: 'eyebrow' }, isSetup ? 'YOUR NEXT CHAPTER' : view === 'employee' ? 'EMPLOYEE ACCESS' : 'ADMIN ACCESS'), el('h1', {}, isSetup ? 'Make room for your people.' : view === 'employee' ? 'Welcome to your workspace.' : 'Welcome back, Admin.'), el('p', { class: 'auth-description' }, isSetup ? 'Create a separate company workspace and its first admin account. Existing companies and their records are preserved.' : view === 'employee' ? 'Choose your company and use the employee credentials provided by your admin.' : 'Choose your company and sign in with its admin account.'));
+    main.append(el('p', { class: 'eyebrow' }, isSetup ? 'NEW WORKSPACE' : view === 'employee' ? 'EMPLOYEE ACCESS' : 'ADMIN ACCESS'), el('h1', {}, isSetup ? 'Create a company' : view === 'employee' ? 'Employee login' : 'Admin login'), el('p', { class: 'auth-description' }, isSetup ? 'Set up a new workspace for your team.' : view === 'employee' ? 'Choose your company and sign in with the account provided by your admin.' : 'Sign in to manage your team and company.'));
     const form = el('form', { class: 'auth-form' });
     if (isSetup) form.append(field('Company name', 'companyName', { autocomplete: 'organization', maxlength: 160 }), field('Your full name', 'name', { autocomplete: 'name', maxlength: 160 }));
     else {
@@ -208,8 +323,8 @@
       });
       form.append(companyField);
     }
-    form.append(field('Email address', 'email', { type: 'email', autocomplete: 'username', maxlength: 254 }), field('Password', 'password', { type: 'password', autocomplete: isSetup ? 'new-password' : 'current-password', minlength: isSetup ? 6 : 1, maxlength: 128, hint: isSetup ? 'At least 6 characters. Use fictional credentials for this prototype.' : undefined }));
-    if (isSetup) form.append(field('Confirm password', 'confirmPassword', { type: 'password', autocomplete: 'new-password', minlength: 6, maxlength: 128 }), el('div', { class: 'notice' }, el('strong', {}, 'A sensible starting point'), el('p', {}, 'Office starts at 09:00 · 15-minute grace period · 20 paid leave days per year. You can edit these in Settings.')));
+    form.append(field('Email address', 'email', { type: 'email', autocomplete: 'username', maxlength: 254 }), field('Password', 'password', { type: 'password', autocomplete: isSetup ? 'new-password' : 'current-password', minlength: isSetup ? 6 : 1, maxlength: 128, hint: isSetup ? 'At least 6 characters.' : undefined }));
+    if (isSetup) form.append(field('Confirm password', 'confirmPassword', { type: 'password', autocomplete: 'new-password', minlength: 6, maxlength: 128 }), el('div', { class: 'notice' }, el('strong', {}, 'Your starting policies'), el('p', {}, '09:00–17:00 shift · 15-minute grace · 20 paid leave days per year. Adjust these in Settings.')));
     form.append(formError(), submitButton(isSetup ? 'Create company' : view === 'employee' ? 'Sign in as employee' : 'Sign in as admin'));
     submit(form, isSetup ? A.createCompany : A.login, (user) => window.location.replace(A.getHomePage(user.role)));
     if (!isSetup && !S.listCompanies().length) {
@@ -217,7 +332,7 @@
       form.querySelector('[type="submit"]').disabled = true;
     }
     if (current) main.append(el('p', { class: 'notice auth-login-notice' }, `You are signed in as ${current.name} at ${S.getCompany().name}. ${isSetup ? 'Creating a company will open its new admin account.' : 'Signing in below switches this browser to the selected company and account.'}`, link('Continue to my dashboard', A.getHomePage(current.role))));
-    main.append(form, el('div', { class: 'prototype-notice' }, 'Hackathon prototype. localStorage and client-side role checks do not protect real credentials or HR data. Use fictional information only.'));
+    main.append(form, el('button', { type: 'button', class: 'data-privacy-link', onClick: () => dialog('About your data', 'Huma stores this workspace in your browser.', el('div', { class: 'privacy-note' }, el('p', {}, 'Accounts and HR records are saved locally in this browser. They are not automatically synchronized or backed up.'), el('p', {}, 'Local credentials and role checks do not provide production security. Use fictional information rather than real employee, credential, or payroll data.'))) }, 'About your data'));
     if (!S.isAvailable() || S.getIssues().some((key) => key !== S.keys.session)) {
       errorMessage(form, 'Browser data is unavailable or malformed. Allow storage or repair the existing hcm_* data before continuing. Nothing has been reset.');
       form.querySelector('[type="submit"]').disabled = true;
@@ -225,21 +340,27 @@
   }
 
   function renderCompanies(main, current) {
-    main.append(el('p', { class: 'eyebrow' }, 'YOUR WORKSPACES'), el('h1', {}, 'Your companies.'), el('p', { class: 'auth-description' }, 'Choose a company to sign in. Each company has its own accounts, policies, calendar, and HR records.'));
+    document.body.classList.add('auth-directory');
+    main.append(el('div', { class: 'company-directory-heading' }, el('div', {}, el('h1', {}, 'Companies'), el('p', { class: 'auth-description' }, 'Manage and switch between your workspaces.')), link('Create company', 'index.html?view=setup', true)));
     const directory = el('div', { class: 'company-list' });
     const activeId = S.getActiveCompanyId();
     const companies = S.listCompanies();
-    if (!companies.length) directory.append(empty('No companies yet', 'Create your first company to start managing your team.', 'building', link('Create company', 'index.html?view=setup', true)));
+    if (!companies.length) directory.append(empty('No companies yet', 'Create your first workspace to get started.', 'building', link('Create company', 'index.html?view=setup', true)));
     for (const company of companies) {
       const isCurrent = Boolean(current && company.id === activeId);
       const loginUrl = (role) => `index.html?view=${role}&company=${encodeURIComponent(company.id)}`;
       const actions = el('div', { class: 'company-actions' });
-      if (isCurrent) actions.append(link('Open dashboard', A.getHomePage(current.role), true));
-      else actions.append(link('Admin login', loginUrl('admin')), link('Employee login', loginUrl('employee')));
-      if (isCurrent && current.role === 'admin') actions.append(button('Rename', () => renameCompanyDialog(company), 'secondary'), link('Settings', 'settings.html'), button('Delete company', () => deleteCompanyDialog(company), 'danger-quiet'));
-      directory.append(el('section', { class: 'company-tile', 'aria-label': company.name }, el('div', { class: 'company-tile-heading' }, el('span', { class: 'empty-icon' }, icon('building')), el('h2', {}, company.name), isCurrent && el('span', { class: 'badge badge-active' }, 'Current company')), el('p', { class: 'muted small' }, isCurrent ? `Signed in as ${current.role === 'admin' ? 'Admin' : 'Employee'}.` : 'Sign in to access this company’s workspace.'), actions));
+      if (isCurrent) actions.append(link('Open workspace', A.getHomePage(current.role), true));
+      else actions.append(link('Switch workspace', loginUrl(current?.role || 'admin'), true));
+      const extra = el('div', { class: 'company-overflow-options' }, link('Admin login', loginUrl('admin')), link('Employee login', loginUrl('employee')));
+      if (isCurrent && current.role === 'admin') extra.append(button('Rename', () => renameCompanyDialog(company), 'secondary'), link('Settings', 'settings.html'), button('Delete company', () => deleteCompanyDialog(company), 'danger-quiet'));
+      const overflow = el('details', { class: 'company-overflow' }, el('summary', { 'aria-label': `More actions for ${company.name}` }, icon('more'), 'More'), extra);
+      overflow.addEventListener('keydown', (event) => { if (event.key === 'Escape' && overflow.open) { event.preventDefault(); overflow.open = false; overflow.querySelector('summary').focus(); } });
+      document.addEventListener('pointerdown', (event) => { if (!overflow.contains(event.target)) overflow.open = false; });
+      actions.append(overflow);
+      directory.append(el('section', { class: `company-tile${isCurrent ? ' is-active-company' : ''}`, 'aria-label': company.name }, el('div', { class: 'company-tile-heading' }, el('span', { class: 'empty-icon' }, icon('building')), el('h2', {}, company.name), isCurrent && el('span', { class: 'badge badge-active' }, 'Active workspace')), el('p', { class: 'muted small' }, isCurrent ? `Signed in as ${current.role === 'admin' ? 'Admin' : 'Employee'}${current.role === 'admin' ? ` · ${S.getUsers().filter((user) => user.role === 'employee').length} employees` : ''}.` : 'Sign in to access this company’s workspace.'), actions));
     }
-    main.append(directory, el('div', { class: 'company-directory-footer' }, link('Create another company', 'index.html?view=setup', true)), el('p', { class: 'prototype-notice' }, 'Companies are saved in this browser only. Sign in as a company’s admin to rename, configure, or delete it. Employee records are never listed here.'));
+    main.append(directory, el('div', { class: 'company-directory-footer' }, link('Create another company', 'index.html?view=setup', true)), el('p', { class: 'company-directory-note' }, 'Companies are saved in this browser only. Sign in as a company’s admin to rename, configure, or delete it. Employee records are never listed here.'));
     if (S.getIssues().length || !S.isAvailable()) main.prepend(el('p', { class: 'form-error', role: 'alert' }, 'Some browser data is unavailable or malformed. Changes are blocked to preserve existing records.'));
     function renameCompanyDialog(company) {
       const form = el('form', {}, field('Company name', 'name', { value: company.name, maxlength: 160 }), formError());
@@ -300,8 +421,42 @@
       main.append(el('section', { class: 'activity-strip', 'aria-label': 'Today’s activity coverage' }, el('div', {}, el('strong', {}, 'Today, at a glance'), el('p', { class: 'muted' }, `${tracked} of ${stats.employees} employees have a check-in or approved leave.`)), el('progress', { max: stats.employees, value: tracked, 'aria-label': 'Employees with check-in or approved leave' })));
     }
   }
-  function employeeDialog(existing = null) {
-    const form = el('form', {}, el('div', { class: 'form-grid' }, field('Full name', 'name', { value: existing?.name || '', maxlength: 160 }), field('Email address', 'email', { type: 'email', value: existing?.email || '', maxlength: 254 }), field(existing ? 'New password (optional)' : 'Temporary password', 'password', { type: 'password', required: !existing, minlength: 6, maxlength: 128, autocomplete: 'new-password', hint: existing ? 'Leave blank to keep the current password.' : 'At least 6 characters. Share fictional credentials for this demo.' }), field('Department', 'department', { value: existing?.department || '', maxlength: 80 }), field('Monthly salary (PKR)', 'salary', { type: 'number', min: '0.01', max: '1000000000000', step: '0.01', value: existing?.salary || '' })), formError());
+  function employeeDialog(existing = null, onDepartmentAdded = null) {
+    const E = window.HCMEmployees;
+    const choices = E.departments();
+    const selected = choices.find((name) => name.toLocaleLowerCase() === existing?.department.trim().toLocaleLowerCase()) || '';
+    const department = select('Department', 'department', [['', 'Select department'], ...choices.map((name) => [name, name])], selected, { required: true });
+    const newName = field('New department name', 'newDepartment', { required: false, maxlength: 80, id: 'new-department-name', placeholder: 'e.g. Customer Success' });
+    const departmentError = el('p', { class: 'department-error', role: 'alert', hidden: true });
+    const editor = el('div', { class: 'department-editor', hidden: true }, newName, departmentError);
+    const openEditor = button('Add department', () => { editor.hidden = false; newName.querySelector('input').required = true; openEditor.hidden = true; newName.querySelector('input').focus(); }, 'secondary', 'plus');
+    openEditor.classList.add('department-add-button');
+    function closeEditor() { editor.hidden = true; newName.querySelector('input').required = false; newName.querySelector('input').value = ''; departmentError.hidden = true; openEditor.hidden = false; }
+    const add = button('Add', async () => {
+      const input = newName.querySelector('input');
+      if (!input.reportValidity()) return;
+      add.disabled = true; add.setAttribute('aria-busy', 'true');
+      try {
+        const name = await E.addDepartment(input.value);
+        const native = department.querySelector('select');
+        native.replaceChildren(el('option', { value: '' }, 'Select department'), ...E.departments().map((value) => el('option', { value }, value)));
+        native.value = name; native.dispatchEvent(new Event('change', { bubbles: true }));
+        onDepartmentAdded?.();
+        closeEditor(); department.querySelector('[role="combobox"]').focus();
+        toast('Department added. It is available to this company.');
+      } catch (error) { departmentError.textContent = error.message; departmentError.hidden = false; input.focus(); }
+      finally { add.disabled = false; add.removeAttribute('aria-busy'); }
+    }, 'primary');
+    editor.append(el('div', { class: 'department-editor-actions' }, add, button('Cancel', () => { closeEditor(); openEditor.focus(); }, 'secondary')));
+    newName.querySelector('input').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') { event.preventDefault(); add.click(); }
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (!add.disabled) { closeEditor(); openEditor.focus(); } }
+    });
+    department.append(openEditor, editor);
+    const form = el('form', {}, el('div', { class: 'form-grid' }, field('Full name', 'name', { value: existing?.name || '', maxlength: 160 }), field('Email address', 'email', { type: 'email', value: existing?.email || '', maxlength: 254 }), field(existing ? 'New password (optional)' : 'Temporary password', 'password', { type: 'password', required: !existing, minlength: 6, maxlength: 128, autocomplete: 'new-password', hint: existing ? 'Leave blank to keep the current password.' : 'At least 6 characters. Share these login details with the employee.' }), department, field('Monthly salary (PKR)', 'salary', { type: 'number', min: '0.01', max: '1000000000000', step: '0.01', value: existing?.salary || '' })), formError());
+    form.addEventListener('submit', (event) => {
+      if (!editor.hidden) { event.preventDefault(); event.stopImmediatePropagation(); departmentError.textContent = 'Add or cancel the new department before saving the employee.'; departmentError.hidden = false; newName.querySelector('input').focus(); }
+    });
     const modal = dialog(existing ? 'Edit employee' : 'Add a new employee', 'Their account gives them access to their own attendance, leave, and payslips.', form);
     form.append(el('div', { class: 'form-actions' }, button('Cancel', modal.close, 'secondary'), submitButton(existing ? 'Save changes' : 'Create employee')));
     submit(form, (input) => window.HCMEmployees.save(input, existing?.id), () => { modal.close(); toast(existing ? 'Employee updated.' : 'Employee account is ready. They can now sign in.'); renderCurrent(); });
@@ -316,16 +471,21 @@
   function renderEmployees() {
     const main = document.getElementById('page-content');
     const employees = window.HCMEmployees.list();
-    main.replaceChildren(heading('Your people.', 'A well-organized team starts with the essentials.', button('Add employee', () => employeeDialog(), 'primary', 'plus')));
+    main.replaceChildren(heading('Your people.', 'A well-organized team starts with the essentials.', button('Add employee', () => employeeDialog(null, refreshDepartmentOptions), 'primary', 'plus')));
     const searchField = field('Search employees', 'search', { type: 'search', required: false, placeholder: 'Search by name or email…', maxlength: 160 });
-    const departmentField = select('Department', 'department-filter', [['', 'All departments'], ...[...new Set(employees.map((user) => user.department))].sort().map((name) => [name, name])]);
+    const departmentField = select('Department', 'department-filter', [['', 'All departments'], ...window.HCMEmployees.departments().map((name) => [name, name])]);
+    function refreshDepartmentOptions() {
+      const input = departmentField.querySelector('select'), previous = input.value;
+      input.replaceChildren(el('option', { value: '' }, 'All departments'), ...window.HCMEmployees.departments().map((name) => el('option', { value: name }, name)));
+      input.value = previous; departmentField.refreshSelect();
+    }
     const results = el('div');
     const count = el('span', { class: 'muted small', role: 'status' });
     const toolbar = el('div', { class: 'toolbar directory-toolbar' }, searchField, departmentField, count);
     function update() {
       const users = window.HCMEmployees.list(searchField.querySelector('input').value, departmentField.querySelector('select').value);
       count.textContent = `${users.length} employee${users.length === 1 ? '' : 's'}`;
-      results.replaceChildren(table(['Employee', 'Department', 'Monthly salary', 'Status', 'Actions'], users.map((user) => [person(user), user.department, U.formatCurrency(user.salary), badge('active'), el('div', { class: 'row-actions' }, button('Edit', () => employeeDialog(user), 'secondary'), button('Delete', () => deleteEmployee(user), 'danger-quiet'))]), empty(employees.length ? 'No matching employees' : 'Your first teammate belongs here', employees.length ? 'Try another name, email, or department.' : 'Create an employee account to get started.', 'users', !employees.length && button('Add employee', () => employeeDialog(), 'primary', 'plus'))));
+      results.replaceChildren(table(['Employee', 'Department', 'Monthly salary', 'Status', 'Actions'], users.map((user) => [person(user), user.department, U.formatCurrency(user.salary), badge('active'), el('div', { class: 'row-actions' }, button('Edit', () => employeeDialog(user, refreshDepartmentOptions), 'secondary'), button('Delete', () => deleteEmployee(user), 'danger-quiet'))]), empty(employees.length ? 'No matching employees' : 'Your first teammate belongs here', employees.length ? 'Try another name, email, or department.' : 'Create an employee account to get started.', 'users', !employees.length && button('Add employee', () => employeeDialog(null, refreshDepartmentOptions), 'primary', 'plus'))));
     }
     searchField.addEventListener('input', update);
     departmentField.addEventListener('change', update);
@@ -333,45 +493,7 @@
     update();
   }
   function renderSettings() {
-    const main = document.getElementById('page-content');
-    const company = S.getCompany();
-    main.replaceChildren(heading('Company settings.', 'Set the shared rhythm for your working day.', link('Manage companies', 'index.html?view=companies')));
-    const form = el('form', { class: 'settings-form' }, el('div', { class: 'settings-section' }, el('div', {}, el('h2', {}, 'Workspace details'), el('p', { class: 'muted' }, 'The company name shown across your workspace.')), field('Company name', 'name', { value: company.name, maxlength: 160 })),
-      el('div', { class: 'settings-section' }, el('div', {}, el('h2', {}, 'Attendance & leave'), el('p', { class: 'muted' }, 'New check-ins use these policies. Recorded attendance keeps its original classification.')), el('div', {}, field('Office start time', 'startTime', { type: 'time', value: company.startTime }), field('Grace period (minutes)', 'graceMinutes', { type: 'number', min: 0, max: 240, step: 1, value: company.graceMinutes, hint: 'A check-in after start time plus grace is late.' }), field('Annual paid leave quota', 'leaveQuota', { type: 'number', min: 0, max: 366, step: 1, value: company.leaveQuota, hint: 'Calendar-year allowance. Existing approvals are preserved; new requests use the saved quota.' }))), formError(), el('div', { class: 'form-actions' }, submitButton('Save settings')));
-    submit(form, window.HCMSettings.save, () => { toast('Company settings saved.'); document.querySelector('.company-name').textContent = S.getCompany().name; });
-    main.append(form);
-    const calendarContent = el('div');
-    function refreshCalendar() {
-      const calendar = S.getCompany().calendarExceptions || [];
-      const rows = calendar.map((entry) => [U.formatDate(entry.date, { weekday: 'short' }), entry.name,
-        el('span', { class: `badge badge-${entry.type}` }, entry.type === 'holiday' ? 'Holiday' : 'Extra working day'),
-        el('div', { class: 'row-actions' }, button('Edit', () => editCalendarDay(entry), 'secondary'), button('Remove', () => removeCalendarDay(entry), 'danger-quiet'))]);
-      calendarContent.replaceChildren(table(['Date', 'Title', 'Day type', 'Actions'], rows, empty('No calendar exceptions', 'Your default workweek is Monday to Friday. Add a holiday or make a weekend an extra working day.', 'calendar')));
-    }
-    function editCalendarDay(entry = null) {
-      const calendarForm = el('form', {}, field('Title', 'title', { value: entry?.name || '', maxlength: 100, placeholder: 'e.g. Company holiday or weekend shift' }),
-        el('div', { class: 'form-grid' }, field('Date', 'calendarDate', { type: 'date', value: entry?.date || '' }), select('Day type', 'dayType', [['holiday', 'Holiday — non-working'], ['working', 'Extra working day']], entry?.type || 'holiday')), formError());
-      const modal = dialog(entry ? 'Edit calendar date' : 'Add calendar date', 'Holidays are days off. Extra working days override the usual weekend schedule. Attendance, leave counts, and payroll use this calendar.', calendarForm);
-      calendarForm.append(el('div', { class: 'form-actions' }, button('Cancel', modal.close, 'secondary'), submitButton(entry ? 'Save calendar date' : 'Add calendar date')));
-      submit(calendarForm, (input) => window.HCMSettings.saveCalendarDay(input, entry?.date || null), () => { modal.close(); toast('Company calendar saved. Leave and payroll totals now use the updated dates.'); refreshCalendar(); });
-    }
-    function removeCalendarDay(entry) {
-      const removalForm = el('form', {}, el('p', { class: 'notice' }, `Remove “${entry.name}” on ${U.formatDate(entry.date)}? This date will return to the default Monday–Friday schedule. Leave and payroll totals will recalculate.`), formError());
-      const modal = dialog('Remove calendar exception?', 'Recorded attendance and leave requests are preserved.', removalForm);
-      removalForm.append(el('div', { class: 'form-actions' }, button('Keep date', modal.close, 'secondary'), submitButton('Remove exception')));
-      submit(removalForm, () => window.HCMSettings.removeCalendarDay(entry.date), () => { modal.close(); toast('Calendar exception removed. The default schedule applies to this date.'); refreshCalendar(); });
-    }
-    const calendarSection = card('Company calendar', 'Holidays and extra working days for the whole team.', el('div', {}, el('div', { class: 'card-body calendar-note' }, el('p', { class: 'notice' }, 'Saturday and Sunday are off unless you add an extra working day. Holidays do not count toward attendance requirements, leave days, or payroll working days. Changes recalculate leave balances and payroll, including past periods. Recorded attendance is kept.')), calendarContent), button('Add calendar date', () => editCalendarDay(), 'primary', 'plus'));
-    calendarSection.classList.add('calendar-settings');
-    main.append(calendarSection);
-    refreshCalendar();
-  }
-  function reviewLeave(leave) {
-    const user = S.findById('users', leave.employeeId);
-    const form = el('form', {}, el('div', { class: 'request-summary' }, el('strong', {}, user?.name || 'Employee'), el('p', {}, `${U.formatDate(leave.from)} – ${U.formatDate(leave.to)} · ${leave.days} working day(s)`), el('p', { class: 'muted' }, leave.reason)), select('Decision', 'decision', [['approved', 'Approve paid leave'], ['rejected', 'Reject request']], 'approved'), field('Comment (optional)', 'comment', { type: 'textarea', required: false, maxlength: 1000, rows: 3 }), formError());
-    const modal = dialog('Review leave request', 'The employee can see your decision and comment.', form);
-    form.append(el('div', { class: 'form-actions' }, button('Cancel', modal.close, 'secondary'), submitButton('Save decision')));
-    submit(form, (input) => window.HCMLeaves.decide(leave.id, input.decision, input.comment), () => { modal.close(); toast('Leave decision saved.'); renderCurrent(); });
+    window.HCMSettingsWorkspace.render({ el, icon, iconButton, button, link, heading, field, select, dialog, toast, formError, submit, submitButton, empty });
   }
   function renderLeaves() {
     const main = document.getElementById('page-content');
@@ -389,7 +511,7 @@
     main.append(el('section', { class: 'card' }, el('div', { class: 'toolbar' }, filter), results));
     update();
   }
-  function leaveForm(user) {
+  function leaveForm(user, onSuccess) {
     const form = el('form', { class: 'card-body leave-form' }, select('Leave type', 'type', [['annual', 'Annual leave (paid)'], ['personal', 'Personal leave (paid)']], 'annual'), el('div', { class: 'form-grid' }, field('From date', 'from', { type: 'date', min: U.localDate() }), field('To date', 'to', { type: 'date', min: U.localDate() })), field('Reason', 'reason', { type: 'textarea', maxlength: 1000, rows: 3, placeholder: 'A brief note for your admin…' }), el('p', { class: 'field-hint', 'data-leave-preview': true }, 'Only company working days count. Holidays are excluded and extra working days are included. Both types use your annual paid leave allowance.'), formError(), submitButton('Submit leave request'));
     const from = form.elements.from;
     const to = form.elements.to;
@@ -403,93 +525,214 @@
     }
     from.addEventListener('change', preview);
     to.addEventListener('change', preview);
-    submit(form, window.HCMLeaves.apply, () => { toast('Leave request sent to your admin.'); renderCurrent(); });
+    submit(form, window.HCMLeaves.apply, () => { toast('Leave request sent to your admin.'); if (onSuccess) onSuccess(); renderCurrent(); });
     return form;
   }
   function renderEmployee() {
+    window.clearInterval(employeeTimer);
     const main = document.getElementById('page-content');
-    const user = A.getCurrentUser();
-    const today = U.localDate();
+    const user = A.requireRole('employee');
+    const company = S.getCompany();
+    const companyId = S.getActiveCompanyId();
+    const M = window.HCMEmployeeDashboard;
+    const now = new Date();
+    const today = U.localDate(now);
     const records = window.HCMAttendance.records(user.id);
     const leaves = window.HCMLeaves.list();
-    const balance = window.HCMLeaves.balance(user.id);
-    const calendar = S.getCompany().calendarExceptions || [];
+    const calendar = company.calendarExceptions || [];
     const dayInfo = U.calendarDay(today, calendar);
     const state = window.HCMAttendance.dayState(user, today, records, leaves, today, calendar);
-    main.replaceChildren(heading(`Hello, ${user.name.split(' ')[0]}.`, `${user.department} · ${U.formatDate(today, { weekday: 'long' })}`, link('View my payslip', 'payslip.html')));
-    main.append(el('div', { class: 'metrics-grid metrics-three' }, metric('Monthly salary', U.formatCurrency(user.salary), 'Your base salary · PKR', 'file'), metric('Paid leave remaining', `${balance.remaining} days`, `${balance.used} used of ${balance.quota} this year`, 'calendar'), metric('Today’s status', U.statusLabels[state.status] || state.status, state.record?.checkIn ? `Checked in at ${U.formatTime(state.record.checkIn)}` : 'Your attendance for today', 'clock')));
     const record = state.record;
-    const action = async (kind, target) => {
-      target.disabled = true;
-      try { await window.HCMAttendance[kind](); toast(kind === 'checkIn' ? 'You’re checked in. Have a good day.' : 'Checked out. Your working hours have been saved.'); renderCurrent(); }
-      catch (error) { toast(error.message, true); target.disabled = false; }
-    };
-    const checkIn = button('Check in', (event) => action('checkIn', event.currentTarget), 'primary', 'clock');
-    const checkOut = button('Check out', (event) => action('checkOut', event.currentTarget), 'secondary', 'arrow');
-    checkIn.disabled = Boolean(record) || ['non-working', 'holiday', 'leave'].includes(state.status);
-    checkOut.disabled = !record || Boolean(record.checkOut);
-    const hours = record ? U.calculateWorkedHours(record.checkIn, record.checkOut) : null;
-    main.append(el('section', { class: 'attendance-action' }, el('div', {}, el('p', { class: 'eyebrow' }, 'YOUR WORKING DAY'), el('h2', {}, state.status === 'holiday' ? 'Enjoy your company holiday.' : state.status === 'non-working' ? 'A little room to recharge.' : state.status === 'leave' ? 'Enjoy your approved time away.' : record?.checkOut ? 'Your day is recorded.' : record ? 'You’re on the clock.' : 'Ready when you are.'), el('p', { class: 'muted' }, state.status === 'holiday' ? dayInfo.name : state.status === 'non-working' ? 'Today is a non-working day in your company calendar.' : record ? `Check-in ${U.formatTime(record.checkIn)} · Check-out ${U.formatTime(record.checkOut)}${hours !== null ? ` · ${hours.toFixed(2)} hours` : ''}` : `${dayInfo.type === 'working' ? `Extra working day: ${dayInfo.name} · ` : ''}Office starts ${S.getCompany().startTime} · ${S.getCompany().graceMinutes}-minute grace period.`)), el('div', { class: 'row-actions' }, checkIn, checkOut)));
-    const historyMonth = field('Attendance month', 'history-month', { type: 'month', value: today.slice(0, 7), max: today.slice(0, 7) });
-    const history = el('div');
-    function updateHistory() {
-      try {
-        const { year, month } = U.parseMonth(historyMonth.querySelector('input').value);
-        const [from, to] = U.monthRange(year, month);
-        const historyDates = [...new Set([...U.workingDates(from, to, calendar), ...records.filter((record) => record.date >= from && record.date <= to).map((record) => record.date)])].sort().reverse();
-        const rows = historyDates.filter((date) => date <= today && (!user.createdOn || date >= user.createdOn)).map((date) => {
-          const day = window.HCMAttendance.dayState(user, date, records, leaves, today, calendar);
-          const worked = day.record ? U.calculateWorkedHours(day.record.checkIn, day.record.checkOut) : null;
-          return [U.formatDate(date), U.formatTime(day.record?.checkIn), U.formatTime(day.record?.checkOut), worked === null ? '—' : `${worked.toFixed(2)} h`, badge(day.status)];
-        });
-        history.replaceChildren(table(['Date', 'Check-in', 'Check-out', 'Hours', 'Status'], rows, empty('No attendance records', 'Your working-day history will appear here.', 'clock')));
-      } catch (error) { toast(error.message, true); }
+    const shift = window.HCMAttendance.getEffectiveShift(companyId, today);
+    const balance = window.HCMLeaves.balance(user.id, now.getFullYear());
+    if (!employeeView) employeeView = { year: now.getFullYear(), month: now.getMonth() + 1, selectedDate: today };
+    const context = record?.checkOut ? 'Your working day is recorded. Everything is up to date.' : record ? 'You’re checked in. Your working time is updating live.' : state.status === 'holiday' ? `Enjoy your time off for ${dayInfo.name}.` : state.status === 'non-working' ? 'Today is a day off in your company calendar.' : state.status === 'leave' ? 'You’re on approved leave today. Enjoy your time away.' : 'Here’s your workday at a glance. Check in when you’re ready.';
+    const welcome = heading(`${M.greeting(now)}, ${user.name.split(' ')[0]}`, context,
+      el('div', { class: 'employee-heading-meta' }, el('span', {}, U.formatDate(today, { weekday: 'long' })), badge(state.status)));
+    welcome.id = 'employee-home'; main.replaceChildren(welcome);
+    main.classList.add('employee-workspace-page');
+    function facts(items, className = 'day-facts') {
+      return el('dl', { class: className }, items.map(([label, value]) => el('div', {}, el('dt', {}, label), el('dd', {}, value))));
     }
-    historyMonth.addEventListener('change', updateHistory);
-    updateHistory();
-    main.append(card('Attendance history', 'Your own records, one working day at a time.', el('div', {}, el('div', { class: 'toolbar' }, historyMonth), history)));
-    main.append(el('div', { class: 'content-grid' }, card('Plan some time away', 'Working days follow your company calendar. Your admin will review the request.', leaveForm(user)), card('Your leave requests', 'Decisions and comments from your admin.', table(['Type', 'Dates', 'Days', 'Reason / comment', 'Status'], leaveRows(leaves), empty('No leave requests yet', 'Apply for paid leave using the form.', 'calendar')))));
+    const duration = el('span', { class: 'duration-value', 'aria-live': 'off' });
+    const completed = Boolean(record?.checkOut);
+    const offDay = ['holiday', 'non-working', 'leave'].includes(state.status) && !record;
+    const actionLabel = completed ? 'Completed for Today' : offDay ? state.status === 'holiday' ? 'Company Holiday' : state.status === 'leave' ? 'On Approved Leave' : 'Non-working Day' : record ? 'Check Out' : 'Check In';
+    const actionButton = button(actionLabel, async (event) => {
+      const target = event.currentTarget;
+      target.disabled = true;
+      target.setAttribute('aria-busy', 'true');
+      try {
+        await window.HCMAttendance[record ? 'checkOut' : 'checkIn']();
+        toast(record ? 'Checked out. Your attendance and working hours are saved.' : 'You’re checked in. Have a good working day.');
+        renderCurrent();
+        main.focus({ preventScroll: true });
+      } catch (error) {
+        target.disabled = false;
+        target.removeAttribute('aria-busy');
+        toast(error.message, true);
+      }
+    }, 'primary', completed ? 'check' : 'clock');
+    actionButton.disabled = completed || offDay || (!record && !window.HCMAttendance.checkInWindow(shift, now).allowed);
+    const workTitle = completed ? 'All set for today.' : record ? 'Your day is in progress.' : offDay ? 'A little room to recharge.' : 'Ready for a good day?';
+    const shiftMessage = el('p', { class: 'workday-window', role: 'status', 'aria-live': 'polite' });
+    main.append(el('section', { class: 'workday-panel', 'aria-label': 'Today’s attendance' },
+      el('div', { class: 'workday-top' }, el('div', {}, el('p', { class: 'eyebrow' }, 'TODAY’S WORKING DAY'), el('h2', {}, workTitle)), el('div', { class: 'workday-action' }, actionButton)),
+      facts([['Check-in', U.formatTime(record?.checkIn)], ['Check-out', U.formatTime(record?.checkOut)], [record && !completed ? 'Working time · Live' : 'Total working time', duration], [record?.endTime ? 'Recorded shift' : 'Today’s shift', `${record?.endTime ? record.startTime : shift.startTime} — ${record?.endTime || shift.endTime}`]], 'workday-facts'), shiftMessage,
+      el('p', { class: 'workday-caption' }, (record?.endTime ? record.customShift : shift.custom) && el('span', { class: 'badge badge-custom-shift' }, 'Custom shift'), `${record?.endTime ? record.graceMinutes : shift.graceMinutes}-minute grace period${dayInfo.type !== 'regular' ? ` · ${dayInfo.type === 'working' ? 'Extra working day' : 'Holiday'}: ${dayInfo.name}` : ''}${user.department ? ` · ${user.department}` : ''}`)));
+    function updateShiftControls() {
+      const availability = window.HCMAttendance.checkInWindow(shift, new Date());
+      actionButton.disabled = completed || offDay || (!record && !availability.allowed);
+      const message = completed ? 'Your attendance is complete for today.' : record ? `${record.wasLate ? 'You checked in after the grace period. ' : ''}Check-out remains available after the shift ends.` : state.status === 'leave' ? 'You are on approved leave today.' : availability.message;
+      if (shiftMessage.textContent !== message) shiftMessage.textContent = message;
+      if (!record && !offDay) welcome.querySelector('.page-description').textContent = message;
+    }
+    updateShiftControls();
+
+    function applyForLeave() {
+      let modal;
+      const form = leaveForm(user, () => modal.close());
+      form.classList.remove('card-body');
+      const submitControl = form.querySelector('[type="submit"]');
+      modal = dialog('Apply for leave', 'Choose the dates you need. Only company working days count toward your allowance.', form);
+      form.append(el('div', { class: 'form-actions' }, button('Cancel', modal.close, 'secondary'), submitControl));
+    }
+    function showLeaveRequests() {
+      dialog('Your leave requests', 'Your requests, decisions, and comments from your admin.', table(['Type', 'Dates', 'Days', 'Reason / comment', 'Status'], leaveRows(window.HCMLeaves.list()), empty('No requests yet', 'Your leave requests will appear here.', 'calendar')));
+    }
+    const pending = leaves.filter((leave) => leave.status === 'pending').length;
+    const leaveProgress = el('progress', { max: Math.max(1, balance.quota), value: balance.used, 'aria-label': `${balance.used} of ${balance.quota} annual leave days used` });
+    const leavePanel = card('Time away', `${now.getFullYear()} annual paid leave`, el('div', { class: 'card-body leave-balance-panel' },
+      el('div', { class: 'leave-balance-value' }, el('strong', {}, balance.remaining), el('span', {}, 'days remaining')),
+      leaveProgress, facts([['Annual quota', `${balance.quota} days`], ['Approved leave used', `${balance.used} days`], ['Pending requests', pending]], 'leave-balance-facts'),
+      button('Apply for Leave', applyForLeave, 'primary', 'plus'),
+      el('p', { class: 'field-hint' }, 'Pending requests reserve allowance but do not reduce your approved balance.'),
+      el('div', { class: 'leave-recent' }, el('div', { class: 'compact-section-title' }, el('h3', {}, 'Recent requests'), button('View requests', showLeaveRequests, 'secondary')),
+        leaves.length ? el('ul', { class: 'leave-request-list' }, leaves.slice(0, 3).map((leave) => el('li', {}, el('div', {}, el('span', { class: 'capitalize' }, `${leave.type} leave`), el('small', { class: 'muted' }, `${U.formatDate(leave.from, { year: undefined })} – ${U.formatDate(leave.to, { year: undefined })}`)), badge(leave.status)))) : el('p', { class: 'muted small' }, 'No leave requests yet.'))));
+
+    const payrollContent = el('div', { class: 'card-body payroll-preview' });
+    leavePanel.id = 'leave-balance';
+    const payrollPanel = card('Your pay', 'A transparent monthly view.', payrollContent);
+    const insights = el('div', { class: 'attendance-insights', 'aria-label': 'Monthly attendance insights' });
+    const monthTitle = el('h3', { id: 'attendance-month-title', 'aria-live': 'polite' });
+    const grid = el('div', { class: 'attendance-calendar-grid', role: 'grid', 'aria-labelledby': 'attendance-month-title', 'aria-colcount': '7' });
+    const detail = el('section', { class: 'calendar-day-detail', tabindex: '0', 'aria-labelledby': 'attendance-day-heading' });
+    const emptyMonth = el('p', { class: 'calendar-empty-note' });
+    const recentContent = el('div');
+    const recentPanel = card('Recent attendance activity', 'Saved check-ins for the selected month.', recentContent);
+    let monthModel;
+    let hoursValue;
+    let detailDuration;
+    let selectedDay;
+
+    function selectDate(date, focus = false) {
+      employeeView.selectedDate = date;
+      renderMonth(focus ? date : null);
+    }
+    function shiftMonth(delta) {
+      const shifted = new Date(employeeView.year, employeeView.month - 1 + delta, 1, 12);
+      if (shifted.getFullYear() < 1900 || shifted.getFullYear() > 9998) return;
+      employeeView.year = shifted.getFullYear(); employeeView.month = shifted.getMonth() + 1;
+      employeeView.selectedDate = U.localDate(shifted);
+      renderMonth();
+    }
+    const previousMonth = iconButton('chevronLeft', 'Previous month', () => shiftMonth(-1));
+    const nextMonth = iconButton('chevronRight', 'Next month', () => shiftMonth(1));
+    const todayButton = button('Today', () => {
+      const current = new Date();
+      employeeView = { year: current.getFullYear(), month: current.getMonth() + 1, selectedDate: U.localDate(current) };
+      renderMonth();
+    }, 'secondary');
+    const controls = el('div', { class: 'calendar-controls' }, todayButton, previousMonth, nextMonth);
+    const legend = el('div', { class: 'calendar-legend', 'aria-label': 'Attendance legend' },
+      [['present', 'Present'], ['late', 'Late'], ['half-day', 'Half day'], ['absent', 'Absent'], ['leave', 'Approved leave'], ['non-working', 'Weekend'], ['scheduled', 'Future date'], ['holiday', 'Holiday']]
+        .map(([status, label]) => el('span', { class: `calendar-legend-item status-${status}` }, el('i', { class: 'calendar-dot', 'aria-hidden': 'true' }), label)));
+    const calendarPanel = el('section', { class: 'card attendance-calendar-panel', 'aria-label': 'Attendance calendar' },
+      el('div', { class: 'card-header' }, el('div', {}, el('h2', {}, 'Attendance calendar'), el('p', { class: 'muted' }, 'Your month, one working day at a time.'))),
+      el('div', { class: 'calendar-month-toolbar' }, monthTitle, controls), insights,
+      el('div', { class: 'calendar-body' }, el('div', { class: 'calendar-weekdays', 'aria-hidden': 'true' }, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => el('span', {}, day))), grid, legend, emptyMonth), detail);
+    calendarPanel.id = 'attendance-calendar';
+    main.append(el('div', { class: 'employee-dashboard-layout' }, calendarPanel, el('aside', { class: 'employee-side-panels', 'aria-label': 'Leave and payroll' }, leavePanel, payrollPanel)), recentPanel);
+
+    grid.addEventListener('keydown', (event) => {
+      if (!event.target.dataset.date || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const cursor = U.parseDate(event.target.dataset.date);
+      const weekday = (cursor.getDay() + 6) % 7;
+      const delta = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7, Home: -weekday, End: 6 - weekday }[event.key];
+      cursor.setDate(cursor.getDate() + delta);
+      if (cursor.getFullYear() < 1900 || cursor.getFullYear() > 9998) return;
+      employeeView.year = cursor.getFullYear(); employeeView.month = cursor.getMonth() + 1;
+      selectDate(U.localDate(cursor), true);
+    });
+    function renderMonth(focusDate = null) {
+      monthModel = M.getMonth(employeeView.year, employeeView.month);
+      monthTitle.textContent = U.formatDate(monthModel.from, { day: undefined, month: 'long' });
+      previousMonth.disabled = employeeView.year === 1900 && employeeView.month === 1;
+      nextMonth.disabled = employeeView.year === 9998 && employeeView.month === 12;
+      if (!monthModel.days.some((day) => day.date === employeeView.selectedDate)) employeeView.selectedDate = monthModel.from;
+      selectedDay = monthModel.days.find((day) => day.date === employeeView.selectedDate);
+      hoursValue = el('strong');
+      insights.replaceChildren(...[['Present days', monthModel.summary.presentDays], ['Late arrivals', monthModel.summary.lateDays], ['Half-days', monthModel.summary.halfDays], ['Absent days', monthModel.summary.absentDays], ['Working hours', hoursValue]]
+        .map(([label, value]) => el('div', { class: 'insight-stat', title: label === 'Present days' ? 'Includes late arrivals and half days' : undefined }, el('span', {}, label), value instanceof Node ? value : el('strong', {}, value))));
+      const rows = [];
+      for (let index = 0; index < monthModel.cells.length; index += 7) {
+        rows.push(el('div', { role: 'row', class: 'calendar-week' }, monthModel.cells.slice(index, index + 7).map((day) => {
+          if (!day) return el('div', { role: 'gridcell', class: 'calendar-blank', 'aria-hidden': 'true' });
+          const selected = day.date === employeeView.selectedDate;
+          const dateButton = el('button', { type: 'button', class: `calendar-date status-${day.status}${day.isToday ? ' is-today' : ''}${selected ? ' is-selected' : ''}`, 'data-date': day.date,
+            tabindex: selected ? '0' : '-1', 'aria-label': `${U.formatDate(day.date, { weekday: 'long' })}, ${day.label}${day.calendarType !== 'regular' ? `, ${day.calendarName}` : ''}`,
+            'aria-current': day.isToday ? 'date' : undefined, 'aria-pressed': String(selected), onClick: () => selectDate(day.date, true) },
+            el('span', { class: 'calendar-day-number' }, day.number), el('span', { class: 'calendar-cell-status' }, el('i', { class: 'calendar-dot', 'aria-hidden': 'true' }), el('span', { class: 'calendar-cell-label' }, day.label)));
+          return el('div', { role: 'gridcell', 'aria-selected': String(selected) }, dateButton);
+        })));
+      }
+      grid.setAttribute('aria-rowcount', String(rows.length));
+      grid.replaceChildren(...rows);
+      emptyMonth.hidden = monthModel.hasAttendance;
+      emptyMonth.textContent = 'No check-ins in this month yet. The calendar shows your working days, approved leave, and company holidays.';
+      detailDuration = el('span');
+      detail.replaceChildren(el('div', { class: 'calendar-detail-heading' }, el('h3', { id: 'attendance-day-heading' }, U.formatDate(selectedDay.date, { weekday: 'long' })), badge(selectedDay.status)),
+        facts([['Check-in', U.formatTime(selectedDay.record?.checkIn)], ['Check-out', U.formatTime(selectedDay.record?.checkOut)], ['Working time', detailDuration]]));
+      if (selectedDay.leave) detail.append(el('div', { class: 'calendar-leave-detail' }, el('strong', { class: 'capitalize' }, `${selectedDay.leave.type} leave · Approved`), el('p', {}, selectedDay.leave.reason), selectedDay.leave.comment && el('p', { class: 'muted' }, `Admin comment: ${selectedDay.leave.comment}`)));
+      else if (!selectedDay.record) detail.append(el('p', { class: 'muted small' }, selectedDay.status === 'absent' ? 'No check-in was recorded on this completed working day.' : selectedDay.status === 'not-employed' ? 'This date is before your recorded joining date.' : selectedDay.status === 'holiday' ? selectedDay.calendarName : selectedDay.status === 'non-working' ? 'A regular weekend day. No attendance is required.' : selectedDay.future ? 'This date is upcoming. It has not been counted as an absence.' : 'You have not checked in today.'));
+      if (selectedDay.calendarType === 'working') detail.append(el('p', { class: 'field-hint' }, `Extra working day: ${selectedDay.calendarName}`));
+      const savedShift = selectedDay.record?.endTime ? selectedDay.record : selectedDay.shift;
+      detail.append(el('p', { class: 'field-hint' }, `${selectedDay.record?.endTime ? 'Recorded shift' : 'Current schedule'}: ${savedShift.startTime} — ${savedShift.endTime}${selectedDay.record?.endTime ? selectedDay.record.customShift ? ' · Custom shift' : '' : selectedDay.shift.custom ? ' · Custom shift' : ''}${selectedDay.shift.isWorkingDay ? '' : ' · Non-working day; check-in is closed.'}`));
+      const slip = window.HCMPayroll.calculatePayslip(user.id, employeeView.year, employeeView.month);
+      const estimated = slip.provisional || monthModel.openRecords > 0;
+      payrollContent.replaceChildren(el('div', { class: 'payroll-period' }, el('strong', {}, monthTitle.textContent), el('span', { class: 'badge' }, !slip.eligible ? 'Unavailable' : estimated ? 'Estimate' : 'Calculated')),
+        facts([['Monthly base salary', U.formatCurrency(slip.salary)], [estimated ? 'Estimated deductions' : 'Deductions', slip.eligible ? U.formatCurrency(slip.deduction) : '—']], 'payroll-preview-facts'),
+        el('div', { class: 'payroll-preview-net' }, el('span', {}, estimated ? 'Estimated net salary' : 'Net salary'), el('strong', {}, slip.eligible ? U.formatCurrency(slip.netSalary) : '—')),
+        el('p', { class: 'field-hint' }, !slip.eligible ? 'Payroll is available for started months on or after you joined.' : estimated ? 'Based on recorded attendance and completed working days. The full monthly base is shown; this is not pay earned to date.' : 'Calculated from the completed month’s saved records.'),
+        link(slip.eligible ? 'View Payslip' : 'View current payslip', slip.eligible ? `payslip.html?month=${monthModel.from.slice(0, 7)}` : 'payslip.html'));
+      const recent = monthModel.days.filter((day) => day.record).reverse().slice(0, 5);
+      recentContent.replaceChildren(table(['Date', 'Check-in', 'Check-out', 'Working time', 'Status'], recent.map((day) => [U.formatDate(day.date), U.formatTime(day.record.checkIn), U.formatTime(day.record.checkOut), day.record.checkOut ? M.formatDuration(M.elapsedSeconds(day.record.checkIn, day.record.checkOut)) : day.isToday ? 'In progress' : 'Open check-in', badge(day.status)]), empty('No attendance activity yet', 'Your saved check-ins for this month will appear here.', 'clock')));
+      updateDurations();
+      if (focusDate) grid.querySelector(`[data-date="${focusDate}"]`)?.focus({ preventScroll: true });
+    }
+    function updateDurations() {
+      const current = new Date();
+      duration.textContent = record ? M.formatDuration(M.elapsedSeconds(record.checkIn, record.checkOut, current)) : '—';
+      const totalMinutes = Math.floor(M.totalWorkedHours(monthModel, current) * 60);
+      hoursValue.textContent = `${Math.floor(totalMinutes / 60)}h ${String(totalMinutes % 60).padStart(2, '0')}m`;
+      detailDuration.textContent = selectedDay.record ? selectedDay.record.checkOut || selectedDay.isToday ? M.formatDuration(M.elapsedSeconds(selectedDay.record.checkIn, selectedDay.record.checkOut, current)) : 'Open check-in' : '—';
+    }
+    renderMonth();
+    if (!completed) employeeTimer = window.setInterval(() => {
+      if (A.getCurrentUser()?.id !== user.id || S.getActiveCompanyId() !== companyId) { window.clearInterval(employeeTimer); return; }
+      if (U.localDate() !== today) { window.location.reload(); return; }
+      updateShiftControls();
+      if (record && !record.checkOut) updateDurations();
+    }, 1000);
   }
   function renderPayslip() {
-    const main = document.getElementById('page-content');
-    const actor = A.getCurrentUser();
-    main.replaceChildren(heading(actor.role === 'admin' ? 'Payroll, made clear.' : 'Your payslip.', 'Every working day, every adjustment, in one transparent view.'));
-    const employees = actor.role === 'admin' ? window.HCMEmployees.list() : [actor];
-    if (!employees.length) { main.append(card('Monthly payslip', 'There are no employee accounts yet.', empty('No payslip data', 'Add an employee with a monthly salary to generate a payslip.', 'file', link('Add employee', 'employees.html', true)))); return; }
-    const month = field('Pay period', 'pay-month', { type: 'month', value: U.localDate().slice(0, 7), max: U.localDate().slice(0, 7) });
-    const employeeField = actor.role === 'admin' ? select('Employee', 'pay-employee', employees.map((user) => [user.id, user.name]), employees[0].id) : null;
-    const print = button('Print payslip', () => window.print(), 'secondary', 'print');
-    const toolbar = el('div', { class: 'toolbar payroll-toolbar no-print' }, employeeField, month, print);
-    const content = el('div', { class: 'payslip-container' });
-    function update() {
-      try {
-        const { year, month: number } = U.parseMonth(month.querySelector('input').value);
-        const employeeId = actor.role === 'admin' ? employeeField.querySelector('select').value : actor.id;
-        const employee = employees.find((user) => user.id === employeeId);
-        const slip = window.HCMPayroll.calculatePayslip(employeeId, year, number);
-        if (!slip.eligible) { print.disabled = true; content.replaceChildren(empty('No payslip data for this period', 'Choose a current or past month on or after the employee joined.', 'file')); return; }
-        print.disabled = false;
-        const company = S.getCompany();
-        const period = U.formatDate(U.monthRange(year, number)[0], { day: undefined, month: 'long' });
-        const breakdown = [
-          ['Working days in month', slip.workingDays], ['Days attended', slip.presentDays], ['Late check-ins (included in attended days)', slip.lateDays], ['Half days (included in attended days)', slip.halfDays], ['Absent days', slip.absentDays], ['Approved paid leave days', slip.approvedLeaveDays],
-        ];
-        const sheet = el('article', { class: 'payslip', 'aria-label': 'Salary payslip' }, el('div', { class: 'payslip-heading' }, el('div', {}, el('div', { class: 'payslip-brand' }, 'huma.'), el('p', {}, company.name)), el('div', { class: 'align-right' }, el('p', { class: 'eyebrow' }, 'SALARY STATEMENT'), el('h2', {}, period), badge(slip.provisional ? 'Provisional' : 'Final calculation'))),
-          el('div', { class: 'payslip-identity' }, el('div', {}, el('span', { class: 'muted small' }, 'EMPLOYEE'), el('h2', {}, employee.name), el('p', { class: 'muted' }, employee.department)), el('div', {}, el('span', { class: 'muted small' }, 'EMAIL'), el('p', {}, employee.email)), el('div', {}, el('span', { class: 'muted small' }, 'GENERATED'), el('p', {}, U.formatDate(new Date())))),
-          el('div', { class: 'payslip-columns' }, el('section', {}, el('h3', {}, 'Attendance summary'), el('dl', { class: 'breakdown' }, breakdown.map(([label, value]) => el('div', {}, el('dt', {}, label), el('dd', {}, value))))), el('section', {}, el('h3', {}, 'Salary breakdown'), el('dl', { class: 'breakdown' }, [['Monthly base salary', U.formatCurrency(slip.salary)], ['Daily rate', U.formatCurrency(slip.dailyRate)], ['Deduction days', slip.absentDays + 0.5 * slip.halfDays], ['Total deductions', U.formatCurrency(slip.deduction)]].map(([label, value]) => el('div', {}, el('dt', {}, label), el('dd', {}, value)))), el('div', { class: 'net-salary' }, el('span', {}, 'Net salary'), el('strong', {}, U.formatCurrency(slip.netSalary))))),
-          el('div', { class: 'payslip-notes' }, el('strong', {}, 'A transparent calculation'), el('p', {}, 'Daily rate = monthly salary ÷ working days. Deduction = daily rate × (absent days + 0.5 × half days). Late check-ins add no separate deduction. Approved paid leave is not absence.'), el('p', {}, slip.provisional ? 'Provisional: future dates and today’s missing check-in are not counted as absences. The base salary is the full monthly salary; this is not an earned-to-date payment.' : 'Calculated from the full completed month and stored records.'), el('p', {}, 'Working days follow the company calendar: holidays and regular weekends are excluded; extra working days are included. Absences before joining are excluded. Currency: PKR. Browser-only demonstration; not a production payroll document.')));
-        content.replaceChildren(sheet);
-      } catch (error) { print.disabled = true; content.replaceChildren(empty('Unable to generate payslip', error.message, 'file')); }
-    }
-    month.addEventListener('change', update);
-    employeeField?.addEventListener('change', update);
-    main.append(toolbar, content);
-    update();
+    window.HCMPayrollWorkspace.render({ el, icon, iconButton, button, link, person, heading, empty, table, field, select, dialog, toast, brand });
   }
   function initHelper() {
     const panel = el('section', { class: 'helper-panel', id: 'helper-panel', hidden: true, 'aria-label': 'Smart Helper' });
     const messages = el('div', { class: 'helper-messages', role: 'log', 'aria-live': 'polite', 'aria-relevant': 'additions text' });
-    messages.append(el('p', { class: 'chat-message chat-assistant' }, 'A little help, right here. Ask about attendance, leave, salary, or your workspace. I use keyword matching and your current browser data.'));
+    messages.append(el('p', { class: 'chat-message chat-assistant' }, 'A little help, right here. Ask about your attendance, leave, salary, or workspace.'));
     const input = el('input', { id: 'helper-question', name: 'question', placeholder: 'Ask an HR question…', required: true, maxlength: 300, autocomplete: 'off' });
     const send = el('button', { class: 'icon-button', type: 'submit', 'aria-label': 'Send question' }, icon('arrow'));
     const form = el('form', { class: 'helper-form' }, el('label', { class: 'sr-only', for: 'helper-question' }, 'Your HR question'), input, send);

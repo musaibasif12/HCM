@@ -2,6 +2,24 @@
   'use strict';
   const S = window.HCMStorage;
   const U = window.HCMUtils;
+  const defaultDepartments = Object.freeze(['Human Resources', 'Finance', 'Operations', 'Sales & Marketing', 'Technology', 'Design']);
+  function departments() {
+    window.HCMAuth.requireRole('admin');
+    const names = [...defaultDepartments, ...(S.getCompany().departments || []), ...S.getUsers().filter((user) => user.role === 'employee').map((user) => user.department)];
+    const unique = new Map();
+    for (const name of names) { if (name.trim() && !unique.has(name.trim().toLocaleLowerCase())) unique.set(name.trim().toLocaleLowerCase(), name.trim()); }
+    return [...unique.values()];
+  }
+  function addDepartment(name) {
+    return S.mutate(() => {
+      window.HCMAuth.requireRole('admin');
+      const department = U.required(name, 'Department name', 80);
+      if (departments().some((value) => value.toLocaleLowerCase() === department.toLocaleLowerCase())) throw new Error('This department already exists. Select it from the list.');
+      const company = S.getCompany();
+      S.transaction({ company: { ...company, departments: [...(company.departments || []), department] } });
+      return department;
+    });
+  }
   function save(input, employeeId = null) {
     return S.mutate(() => {
       window.HCMAuth.requireRole('admin');
@@ -27,14 +45,15 @@
       window.HCMAuth.requireRole('admin');
       const user = S.findById('users', employeeId);
       if (!user || user.role !== 'employee') throw new Error('Employee no longer exists.');
-      S.transaction({ users: S.getUsers().filter((entry) => entry.id !== employeeId), attendance: S.getAttendance().filter((entry) => entry.employeeId !== employeeId), leaves: S.getLeaves().filter((entry) => entry.employeeId !== employeeId) });
+      const company = S.getCompany();
+      S.transaction({ ...(company.payrollPayments ? { company: { ...company, payrollPayments: company.payrollPayments.filter((entry) => entry.employeeId !== employeeId) } } : {}), users: S.getUsers().filter((entry) => entry.id !== employeeId), attendance: S.getAttendance().filter((entry) => entry.employeeId !== employeeId), leaves: S.getLeaves().filter((entry) => entry.employeeId !== employeeId) });
     });
   }
   function list(search = '', department = '') {
     window.HCMAuth.requireRole('admin');
     const query = search.trim().toLowerCase();
-    return S.getUsers().filter((user) => user.role === 'employee' && (!department || user.department === department)
+    return S.getUsers().filter((user) => user.role === 'employee' && (!department || user.department.trim().toLocaleLowerCase() === department.trim().toLocaleLowerCase())
       && `${user.name} ${user.email}`.toLowerCase().includes(query)).sort((a, b) => a.name.localeCompare(b.name));
   }
-  window.HCMEmployees = Object.freeze({ save, remove, list });
+  window.HCMEmployees = Object.freeze({ save, remove, list, defaultDepartments, departments, addDepartment });
 }());

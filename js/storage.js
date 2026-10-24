@@ -27,9 +27,24 @@
       && ['holiday', 'working'].includes(entry.type) && isText(entry.name) && entry.name.length <= 100)
       && new Set(value.map((entry) => entry.date)).size === value.length;
   }
+  function isPayrollPayments(value) {
+    return Array.isArray(value) && value.every((entry) => isObject(entry) && isText(entry.employeeId)
+      && typeof entry.period === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(entry.period)
+      && Number(entry.period.slice(0, 4)) >= 1900 && Number(entry.period.slice(0, 4)) <= 9998
+      && ['paid', 'unpaid'].includes(entry.status) && isAmount(entry.amount)
+      && isTimestamp(entry.updatedAt) && isText(entry.updatedBy))
+      && new Set(value.map((entry) => `${entry.employeeId}/${entry.period}`)).size === value.length;
+  }
 
   function checkKey(key) {
     if (!allowedKeys.has(key)) throw new Error('Unknown HCM storage key.');
+  }
+  const isTime = (value) => typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+  function isShifts(value) {
+    return Array.isArray(value) && value.every((entry) => isObject(entry) && isDate(entry.date)
+      && isTime(entry.startTime) && isTime(entry.endTime) && entry.endTime > entry.startTime
+      && typeof entry.note === 'string' && entry.note.length <= 240)
+      && new Set(value.map((entry) => entry.date)).size === value.length;
   }
 
   function readJSON(key, fallback = null) {
@@ -76,7 +91,12 @@
       && (value.id === undefined || isText(value.id))
       && typeof value.startTime === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value.startTime)
       && isWholeNumber(value.graceMinutes) && isWholeNumber(value.leaveQuota)
-      && (value.calendarExceptions === undefined || isCalendar(value.calendarExceptions)),
+      && (value.calendarExceptions === undefined || isCalendar(value.calendarExceptions))
+      && (value.endTime === undefined || (isTime(value.endTime) && value.endTime > value.startTime))
+      && (value.shiftExceptions === undefined || isShifts(value.shiftExceptions))
+      && (value.departments === undefined || (Array.isArray(value.departments) && value.departments.every((name) => isText(name) && name.trim() === name && name.length <= 80)
+        && new Set(value.departments.map((name) => name.toLocaleLowerCase())).size === value.departments.length))
+      && (value.payrollPayments === undefined || isPayrollPayments(value.payrollPayments)),
     users: (value) => isObject(value) && isText(value.id) && isText(value.name)
       && isText(value.email) && isText(value.password) && isRole(value.role)
       && typeof value.department === 'string' && isAmount(value.salary)

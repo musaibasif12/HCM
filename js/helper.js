@@ -11,7 +11,10 @@
       if (/late/.test(text)) return `${stats.late} employee(s) checked in late today, including any who later completed a half day.`;
       if (/present|attendance/.test(text)) return `${stats.present} of ${stats.employees} employee(s) have checked in today.${U.isWorkingDay(U.localDate(), company.calendarExceptions || []) ? '' : ' Today is a holiday or non-working day in the company calendar.'}`;
       if (/employee|team|headcount|staff/.test(text)) return `There are ${stats.employees} active employee(s) in your workspace.`;
-      if (/start|office|grace/.test(text)) return `Office starts at ${company.startTime}, with ${company.graceMinutes} grace minutes.`;
+      if (/start|office|grace|shift/.test(text)) {
+        const shift = window.HCMAttendance.getEffectiveShift(window.HCMStorage.getActiveCompanyId(), U.localDate());
+        return `Today’s ${shift.custom ? 'custom' : 'default'} shift is ${shift.startTime}–${shift.endTime}, with ${shift.graceMinutes} grace minutes.${shift.isWorkingDay ? '' : ' Today is non-working; custom hours do not open check-in.'}`;
+      }
       if (/company|organisation|organization/.test(text)) return `Your company is ${company.name}.`;
       return 'I can help with employee count, present or late employees today, pending leave requests, company name, and office start time. Try “How many employees are present today?”';
     }
@@ -21,6 +24,10 @@
       return 'I can only answer questions about your own salary, leave, attendance, and payslip.';
     }
     const now = new Date();
+    if (/shift|office|grace/.test(text)) {
+      const shift = window.HCMAttendance.getEffectiveShift(window.HCMStorage.getActiveCompanyId(), U.localDate(now));
+      return `Today’s ${shift.custom ? 'custom' : 'default'} shift: ${shift.startTime}–${shift.endTime}; ${shift.graceMinutes}-minute grace. ${window.HCMAttendance.checkInWindow(shift, now).message}`;
+    }
     if (/request|application|approval/.test(text) && /leave|status/.test(text)) {
       const requests = window.HCMLeaves.list();
       if (!requests.length) return 'You have no leave requests yet. Apply from My dashboard.';
