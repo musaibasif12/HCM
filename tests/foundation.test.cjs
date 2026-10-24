@@ -45,21 +45,23 @@ function withSession(role, allowedRoles) {
   return env;
 }
 
-test('Exactly seven HTML pages with valid local assets and links', () => {
-  const pages = fs.readdirSync(root).filter((name) => name.endsWith('.html')).sort();
+test('Exactly seven HTML pages in pages/ with valid local assets and links', () => {
+  const pagesRoot = path.join(root, 'pages');
+  assert.equal(fs.readdirSync(root).filter((name) => name.endsWith('.html')).length, 0);
+  const pages = fs.readdirSync(pagesRoot).filter((name) => name.endsWith('.html')).sort();
   assert.deepEqual(pages, ['admin.html', 'employee.html', 'employees.html', 'index.html', 'leaves.html', 'payslip.html', 'settings.html']);
   for (const page of pages) {
-    const html = source(page);
+    const html = source(`pages/${page}`);
     assert.match(html, /<meta name="viewport"/);
     assert.match(html, /<main\b/);
     assert.doesNotMatch(html, /\son\w+=/);
     for (const [, target] of html.matchAll(/(?:src|href)="([^"#]+)"/g)) {
-      assert.ok(fs.existsSync(path.join(root, target)), `${page}: ${target} exists`);
+      assert.ok(fs.existsSync(path.resolve(pagesRoot, target)), `${page}: ${target} exists`);
     }
     if (page !== 'index.html') {
       assert.match(html, /data-auth="pending"/);
       assert.match(html, /data-roles="(?:admin|employee|admin,employee)"/);
-      assert.ok(html.indexOf('src="js/auth.js"') < html.indexOf('<body>'));
+      assert.ok(html.indexOf('src="../js/auth.js"') < html.indexOf('<body>'));
     }
   }
 });

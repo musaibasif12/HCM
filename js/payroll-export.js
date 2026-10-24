@@ -91,7 +91,7 @@
     }
     const logo = new Image();
     try {
-      await new Promise((resolve, reject) => { logo.onload = resolve; logo.onerror = reject; logo.src = 'assets/huma-logo.svg'; });
+      await new Promise((resolve, reject) => { logo.onload = resolve; logo.onerror = reject; logo.src = '../assets/huma-logo.svg'; });
       ctx.drawImage(logo, 40, 24, 28, 28);
     } catch { /* The statement remains downloadable if its optional logo cannot load. */ }
     text('huma', 25, '600', '#275D4E', 78); y = 86;

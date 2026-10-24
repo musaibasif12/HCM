@@ -10,9 +10,11 @@ The supplied green Human H logo appears on the main page, sidebar, payslips, and
 
 ## Run
 
-Open the project folder in VS Code and use **Live Server → Open with Live Server** on `index.html`. Any static HTTP server works. Keep the same origin and port to retain the same browser data.
+All seven HTML entry pages live in `pages/`. Serve the repository root and open `/pages/index.html`; shared `css/`, `js/`, and `assets/` folders remain at the root. Keep the same origin and port to retain existing browser records: moving the page path does not change localStorage. Do not serve or publish only the `pages` directory, because the shared assets are outside it.
 
-Opening `index.html` directly may work, but `file://` localStorage behavior differs between browsers; use HTTP for a reliable multi-page demonstration. An internet connection loads Inter from Google Fonts; system fonts work offline. Icons and favicon are local SVGs. No external JavaScript libraries are required.
+Open the project folder in VS Code and use **Live Server → Open with Live Server** on `pages/index.html`. Any static HTTP server works. Keep the same origin and port to retain the same browser data.
+
+Opening `pages/index.html` directly may work, but `file://` localStorage behavior differs between browsers; use HTTP for a reliable multi-page demonstration. An internet connection loads Inter from Google Fonts; system fonts work offline. Icons and favicon are local SVGs. No external JavaScript libraries are required.
 
 ## First-run setup
 
@@ -123,13 +125,13 @@ Admin examples: “How many employees are there?”, “How many are present tod
 Exactly seven application pages are preserved:
 
 ```text
-index.html                 Company directory, creation and company-specific login
-admin.html                 Company overview and attendance
-employees.html             Employee directory and CRUD
-leaves.html                Admin leave decisions
-settings.html              Company policies and calendar exceptions
-employee.html              Employee self-service
-payslip.html               Role-aware payroll and print view
+pages/index.html                 Company directory, creation and company-specific login
+pages/admin.html                 Company overview and attendance
+pages/employees.html             Employee directory and CRUD
+pages/leaves.html                Admin leave decisions
+pages/settings.html              Company policies and calendar exceptions
+pages/employee.html              Employee self-service
+pages/payslip.html               Role-aware payroll and print view
 css/style.css              huma tokens, shell and reusable components
 css/responsive.css         Responsive breakpoints and print stylesheet
 js/utils.js                Date, time, formatting and validation functions
@@ -197,7 +199,7 @@ Browser QA used a separate test origin with manually entered fictional accounts,
 
 ## Static deployment
 
-**GitHub Pages:** Push these files, open the repository’s Settings → Pages, select deployment from the branch containing `index.html`, and choose the repository root. No build command is needed. Relative assets work under a repository subpath.
+**GitHub Pages:** Push these files, open the repository’s Settings → Pages, select deployment from the branch containing `pages/index.html`, and choose the repository root. Open `pages/index.html` beneath the published site URL. No build command is needed. Relative assets work under a repository subpath.
 
 **Netlify:** Drop the project folder into a manual static deployment, or connect the repository. Leave the build command empty and set publish directory to the repository root (`.`). Vercel also supports the folder as an “Other” static project without a build step.
 

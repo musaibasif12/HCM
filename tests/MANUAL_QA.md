@@ -1,5 +1,12 @@
 # Browser QA and repeatable acceptance checks
 
+## HTML directory organization
+
+- Moved all seven HTML files into `pages/`. Shared scripts, styles, and images remain in their existing root folders. Updated HTML asset references plus the rendered brand and downloadable payslip logo paths.
+- Page-to-page navigation, login redirects, query parameters and section hashes remain sibling-relative within `pages/`. The new entry point is `/pages/index.html` when serving the repository root. Existing browser data stays on the same origin.
+- Updated the foundation asset/link checks to resolve from each page's actual directory and require all seven HTML pages inside `pages/`. All 82 automated checks pass.
+- Browser smoke check loaded `/pages/admin.html` with the existing company/session, navigated to `/pages/employees.html` with all four QA employees retained, opened `/pages/index.html?view=admin`, and signed back into `/pages/admin.html`. Logo images loaded and no browser warnings/errors were captured. The clean first-run preview also opened at `/pages/index.html` on its separate origin.
+
 ## Dropdown consistency and department categories — 25 October 2026
 
 - Replaced native select popups with one shared Huma control across all seven pages. Menus use neutral surfaces, mint selected/active states, checkmarks, a scrollable list and viewport-aware placement. Underlying native select names/values and existing form/change handlers remain in use.

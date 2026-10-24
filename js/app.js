@@ -56,7 +56,7 @@
   }
   function brand(linked = true) {
     return el(linked ? 'a' : 'div', { class: 'brand', href: linked ? 'index.html' : undefined, 'aria-label': linked ? 'Huma home' : 'Huma' },
-      el('img', { class: 'brand-mark', src: 'assets/huma-logo.svg', width: 36, height: 36, alt: '', 'aria-hidden': 'true' }), el('span', { class: 'brand-wordmark' }, 'huma'));
+      el('img', { class: 'brand-mark', src: '../assets/huma-logo.svg', width: 36, height: 36, alt: '', 'aria-hidden': 'true' }), el('span', { class: 'brand-wordmark' }, 'huma'));
   }
   function button(text, action, variant = 'primary', iconName) {
     return el('button', { type: 'button', class: `button button-${variant}`, onClick: action }, iconName && icon(iconName), text);
